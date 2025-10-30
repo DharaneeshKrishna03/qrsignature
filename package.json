@@ -1,0 +1,31 @@
+{
+  "name": "api",
+  "version": "1.0.0",
+  "main": "server.js",
+  "scripts": {
+    "test": "echo \"Error: no test specified\" && exit 1",
+    "start": "node server.js"
+  },
+  "keywords": [],
+  "author": "",
+  "license": "ISC",
+  "description": "",
+  "dependencies": {
+    "@aws-sdk/client-dynamodb": "^3.883.0",
+    "@aws-sdk/client-s3": "^3.913.0",
+    "@aws-sdk/lib-dynamodb": "^3.918.0",
+    "@aws-sdk/util-dynamodb": "^3.883.0",
+    "@azure/cosmos": "^4.7.0",
+    "@azure/storage-blob": "^12.29.1",
+    "axios": "^1.11.0",
+    "cheerio": "^1.1.2",
+    "cors": "^2.8.5",
+    "crypto-js": "^4.2.0",
+    "dotenv": "^17.2.2",
+    "express": "^5.1.0",
+    "jsdom": "^27.0.1",
+    "jsonwebtoken": "^9.0.2",
+    "qrcode": "^1.5.4",
+    "uuid": "^13.0.0"
+  }
+}
