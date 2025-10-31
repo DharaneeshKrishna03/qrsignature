@@ -166,13 +166,14 @@ const getTicketsByAsset = async (
 
     const querySpec = {
       query:
-        "SELECT c.ticketData FROM c WHERE c.domain = @domain c.assetId = @assetId",
+        "SELECT c.ticketData FROM c WHERE c.domain = @domain AND c.assetNo = @assetNo",
       parameters: [
         { name: "@domain", value: domainString },
-        { name: "@assetPrefix", value: `A#${assetNo}#` },
+        { name: "@assetNo", value: assetNo },
       ],
     };
   
+    console.log(querySpec);
 
     const options = {
       maxItemCount: limit,
