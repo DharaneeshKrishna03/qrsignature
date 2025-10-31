@@ -459,7 +459,6 @@ const addSignature = async (req, res) => {
   }
 };
 
-
 //Asset Tracker
 const getAssociations = async (req, res) => {
   const { displayId, page, nextIds = [] } = req.body;
@@ -793,11 +792,13 @@ const insertAssetUser = async (req,res) => {
 
         const checkAssetAlreadyThere = await getDataFromCosmos({
           containerId: process.env.ASSET_USER_DATA_TABLE,
-          query: "SELECT * FROM c WHERE c.domain = @domain AND c.assetId = @assetId",
+          query: "SELECT * FROM c WHERE c.domain = @domain AND c.assetNo = @assetNo AND c.ticketId = @ticketId ",
           parameters: [
-            { name: "@domain", value: domain }, { name: "@assetId", value: `A#${assetId}#T${ticketId}` }
+            { name: "@domain", value: domain }, { name: "@assetNo", value: assetId }, { name: "@ticketId", value: ticketId }
           ]
         });
+
+        let isAssetPresent = false;
         
         // await getRowBySortKey(process.env.ASSET_USER_DATA_TABLE,"domain",domain,"assetId",`A#${assetId}#T${ticketId}`);
 
@@ -807,13 +808,14 @@ const insertAssetUser = async (req,res) => {
           const data = checkAssetAlreadyThere?.data;
           const previousCount = data?.ticketData?.assetQuantity;
           const presentCount = assetQuantity || 0;
-
+          isAssetPresent = true;
           const newCount = presentCount - previousCount;
           ASSET_TOTAL_QUANTITY = newCount;
 
         }
         else{
           ASSET_TOTAL_QUANTITY = assetQuantity || 0;
+          isAssetPresent = false;
         }
 
         const checkAssetCount = await getDataFromCosmos({
@@ -861,7 +863,7 @@ const insertAssetUser = async (req,res) => {
         }
 
         
-        return await upsertDataToCosmos({
+        return  isAssetPresent ? {status : 200, message : "Asset Already Present"} : await upsertDataToCosmos({
             containerId: process.env.ASSET_USER_DATA_TABLE, 
             item : rowData,
             partitionKey : domain});
@@ -870,7 +872,8 @@ const insertAssetUser = async (req,res) => {
       });
 
       // Wait for current batch to finish
-      await Promise.all(insertPromises);
+      const data = await Promise.all(insertPromises);
+      console.log(data);
     }
   }
 
