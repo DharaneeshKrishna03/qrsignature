@@ -1,6 +1,7 @@
 const QRCode = require("qrcode");
 const cheerio  = require('cheerio');
 const axios = require('axios');
+const FormData = require("form-data")
 
 const { uploadBase64ToBlob,updateItemFieldsInCosmos,upsertDataToCosmos, getTicketsByAsset,getAssetTicketCount,getAssetQuantityCount,getDataFromCosmos } = require("../Functions/cosmos");
 const { callFreshserviceAPI,generateSignatureUrl,getConsumableType,fetchFS,fetchAllPages } = require("../Utils/freshservice");
@@ -87,7 +88,7 @@ const updateTicket = async (req) => {
         data: null,
         apiKey: decAPIKey,
         domain: clientDomain,
-        maxRetries: 5,
+        maxRetries: 15,
         retryLogic: true,
       });
 
@@ -227,6 +228,127 @@ const triggerSignature = async (req,res) => {
 
 }
 
+const sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
+
+const addSignatureNote = async ({
+  name,
+  base64Data,
+  cfUrl,
+  fileName = "signature.png",
+  ticketId,
+  requesterId,
+  decAPIKey,
+  domain,
+  maxRetries = 15,
+  baseDelay = 60000, // ms
+}) => {
+  try {
+    const noteBody = `
+      <div style="text-align: left;">
+              <h3 style="font-weight: 500; margin-bottom: 20px;">${name}</h3>
+              <img src="${cfUrl}" alt="Inline Image" style="display: inline-block; width: 250px; height: auto;">
+            </div>
+    `;
+
+    // Extract base64 parts
+    const matches = base64Data.match(/^data:(.+);base64,(.+)$/);
+    if (!matches) throw new Error("Invalid base64 image data");
+
+    const buffer = Buffer.from(matches[2], "base64");
+    const mimeType = matches[1];
+
+    const url = `https://${domain}/api/v2/tickets/${ticketId}/notes`;
+    const auth = Buffer.from(`${decAPIKey}:X`).toString("base64");
+    
+
+    let attempt = 0;
+    let hasRetriedWithoutUser = false;
+
+    while (attempt < maxRetries) {
+      try {
+
+        const form = new FormData();
+        form.append("body", noteBody);
+        if (requesterId && !hasRetriedWithoutUser) {
+          form.append("user_id", requesterId);
+        }
+        form.append("attachments[]", buffer, {
+          filename: fileName,
+          contentType: mimeType,
+        });
+
+        const response = await axios.post(url, form, {
+          headers: {
+            Authorization: `Basic ${auth}`,
+            ...form.getHeaders(),
+          },
+        });
+
+        console.log("✅ Note created successfully:", response.data);
+        return {
+          success: true,
+          data: response.data,
+          status: response.status,
+        };
+      } catch (error) {
+        const status = error.response?.status;
+        const responseData = error.response?.data;
+
+        console.log(error);
+
+        // 403 handling — retry once without user_id
+        if (status === 403 && !hasRetriedWithoutUser && requesterId) {
+          console.warn("⚠️ 403 Forbidden — retrying note creation without user_id...");
+          hasRetriedWithoutUser = true;
+          continue;
+        }
+
+        // 429 handling — rate limit
+        if (status === 429) {
+          const retryAfterHeader = error.response?.headers["retry-after"];
+          const retryAfter =
+            retryAfterHeader && !isNaN(retryAfterHeader)
+              ? parseInt(retryAfterHeader) * 1000
+              : baseDelay * Math.pow(2, attempt);
+
+          console.warn(
+            `⏳ Rate limit hit (429). Retrying in ${retryAfter / 1000}s (attempt ${
+              attempt + 1
+            }/${maxRetries})...`
+          );
+          await sleep(retryAfter);
+          attempt++;
+          continue;
+        }
+
+        // For any other error, stop retries and throw
+        console.error(
+          `❌ Freshservice note creation failed (status ${status}):`,
+          responseData || error.message
+        );
+        return {
+          success: false,
+          status: status || 500,
+          error: responseData || error.message,
+        };
+      }
+    }
+
+    return {
+      success: false,
+      status: 429,
+      error: "Max retry attempts reached due to rate limiting",
+    };
+  } catch (error) {
+    console.error("❌ Error adding signature note:", error);
+    return {
+          success: false,
+          status: 500,
+          error: error.message,
+        };
+  }
+};
+
 const addSignature = async (req, res) => {
   try {
     const { ticketId, domain, name, signature, requesterId } = req.body;
@@ -256,35 +378,19 @@ const addSignature = async (req, res) => {
       message: "Signature added successfully.",
     });
 
-    // Prepare note payload
-    const notePayload = {
-      body: `<div style="text-align: left;">
-              <h3 style="font-weight: 500; margin-bottom: 20px;">${name}</h3>
-              <img src="${cfUrl}" alt="Inline Image" style="display: inline-block; max-width: 100%; height: auto;">
-            </div>`
-    };
-    if (requesterId) notePayload.user_id = requesterId;
 
-    // Helper to create note
-    const createNote = async (payload) =>
-      await callFreshserviceAPI({
-        method: 'POST',
-        endpoint: `tickets/${ticketId}/notes`,
-        data: payload,
-        apiKey: decAPIKey,
-        domain,
-        maxRetries: 5,
-        retryLogic: true,
-      });
-
-    let noteResponse = await createNote(notePayload);
-
-    // Retry without user_id if 403
-    if (noteResponse.status === 403 && notePayload.user_id) {
-      console.warn('Note creation failed with 403, retrying without user_id...');
-      const { user_id, ...retryPayload } = notePayload;
-      noteResponse = await createNote(retryPayload);
-    }
+    let noteResponse = await addSignatureNote({
+      name,
+      base64Data : signature,
+      cfUrl,
+      fileName,
+      ticketId,
+      requesterId,
+      decAPIKey,
+      domain,
+      maxRetries : 15,
+      baseDelay : 60000, 
+    });
 
     if (noteResponse.status === 200 || noteResponse.status === 201) {
       console.log("Note Created Successfully.");
@@ -296,7 +402,7 @@ const addSignature = async (req, res) => {
         data: null,
         apiKey: decAPIKey,
         domain,
-        maxRetries: 5,
+        maxRetries: 15,
         retryLogic: true,
       });
 
@@ -386,7 +492,7 @@ const getAssociations = async (req, res) => {
         data: null,
         apiKey: decAPIKey,
         domain,
-        maxRetries: 5,
+        maxRetries: 15,
         retryLogic: false,
       });
 

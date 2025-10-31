@@ -8,7 +8,7 @@ const callFreshserviceAPI = async ({
   data = null,
   apiKey,
   domain,
-  maxRetries = 5,
+  maxRetries = 15,
   retryLogic
 }) => {
   const url = `https://${domain}/api/v2/${endpoint}`;
@@ -93,7 +93,7 @@ const fetchFS = (endpoint,decAPIKey,domain) =>
     data: null,
     apiKey: decAPIKey,
     domain,
-    maxRetries: 5,
+    maxRetries: 15,
     retryLogic: true,
   });
 
