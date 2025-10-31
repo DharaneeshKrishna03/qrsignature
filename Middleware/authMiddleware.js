@@ -6,7 +6,7 @@ const {decrypt} = require('../Utils/encDec');
 
 const authorize = async (req, res, next) => {
   const authHeader = req.headers["authorization"];
-  const token = authHeader && authHeader.split(" ")[1]; // Bearer <token>
+  const token = authHeader && authHeader.split(" ")[1]; 
 
   if (!token) {
     return res.status(401).json({ error: "Token required" });
@@ -18,7 +18,7 @@ const authorize = async (req, res, next) => {
     if (!decodedUnverified || !decodedUnverified.domain) {
       return res.status(403).json({ error: "Invalid token payload" });
     };
-    console.log(decodedUnverified);
+
     const CLIENT_TABLE = decodedUnverified.appCode === 'QRSIGRCK' ? process.env.CLIENT_TABLE : process.env.ASSET_CLIENT_TABLE;
 
     const clientRawData = await getDataFromCosmos({
@@ -28,8 +28,6 @@ const authorize = async (req, res, next) => {
           { name: "@domain", value: decodedUnverified.domain }
         ]
       });
-
-    // console.log(clientRawData);
 
     if (clientRawData.status !== 200) {
       return res.status(403).json({ error: "Invalid domain" });
@@ -67,7 +65,6 @@ const verifyToken = async (token,res) => {
         ? process.env.CLIENT_TABLE
         : process.env.ASSET_CLIENT_TABLE;
 
-    // Check if domain exists in DB
     const clientRawData = await getDataFromCosmos({
         containerId: CLIENT_TABLE,
         query: "SELECT * FROM c WHERE c.domain = @domain",

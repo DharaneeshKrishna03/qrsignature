@@ -2,7 +2,6 @@ const {callFreshserviceAPI} = require('../Utils/freshservice');
 const {encrypt} = require('../Utils/encDec');
 
 const {getDataFromCosmos,upsertDataToCosmos,updateItemFieldsInCosmos} = require('../Functions/cosmos');
-const {configureSubscription} = require('./payment');
 const {verifyToken} = require('../Middleware/authMiddleware')
 
 
@@ -65,6 +64,7 @@ const clientRegistration = async (req, res) => {
     const encFsApiKey = await encrypt(fsApiKey);
     const encOrgEmail = await encrypt(orgEmail);
     const encSecretKey = secretKey !== "" ? await encrypt(secretKey) : "";
+    console.log(CLIENT_TABLE,"CLIENT_TABLE");
 
     const isClientExists = await getDataFromCosmos({
         containerId: CLIENT_TABLE,
@@ -107,7 +107,7 @@ const clientRegistration = async (req, res) => {
         });
 
 
-    } else {
+    } else if(isClientExists?.status !== 500){
         const newItem = {
             domain : fsDomain,
             fsApiKey : encFsApiKey,
@@ -122,8 +122,6 @@ const clientRegistration = async (req, res) => {
           newItem.targetUrl = targetUrl
         }
 
-        console.log("here ");
-
         const upsertResponse = await upsertDataToCosmos({
           containerId: CLIENT_TABLE, 
           item : newItem,
@@ -133,6 +131,12 @@ const clientRegistration = async (req, res) => {
         return res.status(upsertResponse.status).json({
           status : upsertResponse.status,
           message : upsertResponse.message
+        });
+    }
+    else{
+      return res.status(500).json({
+          status : 500 ,
+          message : "Client Registration Failed"
         });
     }
 

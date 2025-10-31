@@ -138,8 +138,7 @@ const fetchAllPages = async (baseEndpoint, decAPIKey, domain,key,maxSize) => {
     const response = await fetchFS(endpoint, decAPIKey, domain);
 
     // Try to get array from response (Freshservice returns either .data or direct array)
-    const pageItems = response?.data?.[key]
-    console.log(pageItems);
+    const pageItems = response?.data?.[key];
     if (!Array.isArray(pageItems) || pageItems.length === 0) {
       break; // no more results
     }

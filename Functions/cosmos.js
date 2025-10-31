@@ -10,7 +10,6 @@ const {
   AZURE_COSMOS_DATABASE,
 } = process.env;
 
-// Initialize Cosmos client
 const cosmosClient = new CosmosClient({
   endpoint: AZURE_COSMOS_ENDPOINT,
   key: AZURE_COSMOS_KEY,
@@ -24,8 +23,6 @@ const CONTAINER_NAME = process.env.AZURE_BLOB_CONTAINER;
 const blobServiceClient = BlobServiceClient.fromConnectionString(AZURE_STORAGE_CONNECTION_STRING);
 const containerClient = blobServiceClient.getContainerClient(CONTAINER_NAME);
 
-
-// ✅ Insert a record
 const upsertDataToCosmos = async ({ containerId, item, partitionKey }) => {
   try {
     const container = database.container(containerId);
@@ -54,8 +51,6 @@ const upsertDataToCosmos = async ({ containerId, item, partitionKey }) => {
   }
 };
 
-
-// ✅ Get a record by ID
 const getDataFromCosmos = async ({
   containerId,
   query = "SELECT * FROM c",
@@ -63,14 +58,13 @@ const getDataFromCosmos = async ({
 }) => {
   try {
     const container = database.container(containerId);
- 
     const querySpec = {
       query,
       parameters
     };
+
  
     const { resources: items } = await container.items.query(querySpec).fetchAll();
-
     if(items.length>0){
       return {status : 200 , data :items[0]};
     }
@@ -84,7 +78,6 @@ const getDataFromCosmos = async ({
   }
 };
  
-
 const updateItemFieldsInCosmos = async ({
   containerId,
   id,
@@ -101,8 +94,6 @@ const updateItemFieldsInCosmos = async ({
     }
     const updatedItem = { ...existingItem, ...updates };
 
-    console.log(updatedItem);
-
     const { resource: result } = await container.items.upsert(updatedItem, { partitionKey });
 
     return { status: 200, message: "Item updated successfully", data: result };
@@ -114,44 +105,100 @@ const updateItemFieldsInCosmos = async ({
   }
 };
 
-
-// ✅ Query records (using SQL syntax)
-const queryCosmosItems = async (AZURE_COSMOS_CONTAINER,query, params = []) => {
-  const container = database.container(AZURE_COSMOS_CONTAINER);
+const getAssetTicketCount = async (domainString, assetNo) => {
   try {
+    const container = database.container(process.env.ASSET_USER_DATA_TABLE);
+
+    // ✅ Build a query like DynamoDB’s KeyConditionExpression
+    const querySpec = {
+      query: "SELECT VALUE COUNT(1) FROM c WHERE c.domain = @domain AND STARTSWITH(c.assetId, @assetPrefix)",
+      parameters: [
+        { name: "@domain", value: domainString },
+        { name: "@assetPrefix", value: `A#${assetNo}#` },
+      ],
+    };
+
     const { resources } = await container.items
-      .query({ query, parameters: params })
+      .query(querySpec, { enableCrossPartitionQuery: true })
       .fetchAll();
-    return resources;
+
+    const count = resources[0] || 0;
+
+    console.log(`✅ Count for Asset ${assetNo} in ${domainString}: ${count}`);
+    return count;
   } catch (error) {
-    console.error("❌ Error querying items:", error.message);
-    return [];
+    console.error("❌ Error counting asset tickets:", error.message);
+    return 0;
   }
 };
 
-// ✅ Update a record
-const updateCosmosItem = async (AZURE_COSMOS_CONTAINER,id, partitionKey, updatedData) => {
-  const container = database.container(AZURE_COSMOS_CONTAINER);
+const getAssetQuantityCount = async (domain, assetId) => {
   try {
-    const { resource: existingItem } = await container.item(id, partitionKey).read();
-    const mergedItem = { ...existingItem, ...updatedData };
-    const { resource: updatedItem } = await container.items.upsert(mergedItem);
-    return { status: 200, message: "Record updated successfully", data: updatedItem };
+        
+    const result = await getDataFromCosmos({
+          containerId: process.env.ASSET_COUNT_TABLE,
+          query: "SELECT * FROM c WHERE c.domain = @domain AND c.assetId = @assetId",
+          parameters: [
+            { name: "@domain", value: domain }, { name: "@assetId", value: assetId }
+          ]
+        });
+
+    let count = 0;
+    if(result.status === 200){
+        count = result?.data?.count;
+    }
+    console.log(`✅ Count for Asset ${assetId} in ${domain}: ${count}`);
+    return count || 0;
   } catch (error) {
-    console.error("❌ Error updating item:", error.message);
-    return { status: 500, message: error.message };
+    console.error("❌ Error counting asset tickets:", error);
+    return 0;
   }
 };
 
-// ✅ Delete a record
-const deleteCosmosItem = async (AZURE_COSMOS_CONTAINER,id, partitionKey) => {
-  const container = database.container(AZURE_COSMOS_CONTAINER);
+const getTicketsByAsset = async (
+  domainString,
+  assetNo,
+  continuationToken = null,
+  limit = 300
+) => {
   try {
-    await container.item(id, partitionKey).delete();
-    return { status: 200, message: "Record deleted successfully" };
+    const container = database.container(process.env.ASSET_USER_DATA_TABLE);
+
+    const querySpec = {
+      query:
+        "SELECT c.ticketData FROM c WHERE c.domain = @domain AND STARTSWITH(c.assetId, @assetPrefix)",
+      parameters: [
+        { name: "@domain", value: domainString },
+        { name: "@assetPrefix", value: `A#${assetNo}#` },
+      ],
+    };
+
+    const options = {
+      maxItemCount: limit,
+      continuationToken, 
+      enableCrossPartitionQuery: true,
+    };
+
+    const iterator = container.items.query(querySpec, options);
+    const { resources: items, continuationToken: nextToken } =
+      await iterator.fetchNext();
+
+    console.log(
+      `✅ Found ${items?.length || 0} tickets for Asset ${assetNo} in ${domainString}`
+    );
+
+    const modifiedData = items?.map((item) => item.ticketData) || [];
+
+    return {
+      ticketsData: modifiedData,
+      nextToken: nextToken || null,
+    };
   } catch (error) {
-    console.error("❌ Error deleting item:", error.message);
-    return { status: 500, message: error.message };
+    console.error("❌ Error fetching asset tickets from Cosmos DB:", error.message);
+    return {
+      ticketsData: [],
+      nextToken: null,
+    };
   }
 };
 
@@ -187,4 +234,12 @@ async function uploadBase64ToBlob(base64Data, folderName, fileName) {
   }
 }
 
-module.exports = {upsertDataToCosmos,getDataFromCosmos,updateItemFieldsInCosmos,deleteCosmosItem,queryCosmosItems,uploadBase64ToBlob}
+module.exports = {
+  upsertDataToCosmos,
+  getDataFromCosmos,
+  updateItemFieldsInCosmos,
+  uploadBase64ToBlob,
+  getAssetTicketCount,
+  getAssetQuantityCount,
+  getTicketsByAsset
+};

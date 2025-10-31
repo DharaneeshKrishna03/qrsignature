@@ -2,7 +2,7 @@ const QRCode = require("qrcode");
 const cheerio  = require('cheerio');
 const axios = require('axios');
 
-const { uploadBase64ToBlob,updateDynamoItem,insertDynamoItem, getTicketsByAsset,getAssetTicketCount,getAssetQuantityCount,getRowBySortKey } = require("../Functions/cosmos");
+const { uploadBase64ToBlob,updateItemFieldsInCosmos,upsertDataToCosmos, getTicketsByAsset,getAssetTicketCount,getAssetQuantityCount,getDataFromCosmos } = require("../Functions/cosmos");
 const { callFreshserviceAPI,generateSignatureUrl,getConsumableType,fetchFS,fetchAllPages } = require("../Utils/freshservice");
 const { decrypt } = require("../Utils/encDec");
 const { all } = require("axios");
@@ -528,11 +528,17 @@ const initialScan = async (req,res) => {
 
   if(consumableAssetId){
     let newClient = clientData;
-    delete newClient.domain;
+    // delete newClient.domain;
 
     newClient.consumableId = consumableAssetId;
 
-    const updationStatus = await updateDynamoItem(process.env.ASSET_CLIENT_TABLE,'domain',domain,null,null,newClient);
+    const updationStatus = await updateItemFieldsInCosmos({
+          containerId: process.env.ASSET_CLIENT_TABLE, 
+          id : clientData?.id,
+          partitionKey : domain,
+          updates : newClient,
+        });
+    // await updateDynamoItem(process.env.ASSET_CLIENT_TABLE,'domain',domain,null,null,newClient);
 
     if(updationStatus.status === 200){
       //Get All Consumable Assets
@@ -586,7 +592,10 @@ const initialScan = async (req,res) => {
 
                 ASSET_TOTAL_QUANTITY += assetInfo?.quantity || 0;
 
-                await insertDynamoItem(process.env.ASSET_USER_DATA_TABLE, rowData);
+                await upsertDataToCosmos({
+                      containerId: process.env.ASSET_USER_DATA_TABLE, 
+                      item : rowData,
+                      partitionKey : domain});
               }
             })
           );
@@ -598,7 +607,10 @@ const initialScan = async (req,res) => {
           assetId: assetId,
           count : ASSET_TOTAL_QUANTITY
         }
-        await insertDynamoItem(process.env.ASSET_COUNT_TABLE, countPayload);
+        await upsertDataToCosmos({
+                      containerId: process.env.ASSET_COUNT_TABLE, 
+                      item : countPayload,
+                      partitionKey : domain});
       }
     }
   }
@@ -673,7 +685,15 @@ const insertAssetUser = async (req,res) => {
           updatedAt: new Date().toISOString(),
         };
 
-        const checkAssetAlreadyThere = await getRowBySortKey(process.env.ASSET_USER_DATA_TABLE,"domain",domain,"assetId",`A#${assetId}#T${ticketId}`);
+        const checkAssetAlreadyThere = await getDataFromCosmos({
+          containerId: process.env.ASSET_USER_DATA_TABLE,
+          query: "SELECT * FROM c WHERE c.domain = @domain AND c.assetId = @assetId",
+          parameters: [
+            { name: "@domain", value: domain }, { name: "@assetId", value: `A#${assetId}#T${ticketId}` }
+          ]
+        });
+        
+        // await getRowBySortKey(process.env.ASSET_USER_DATA_TABLE,"domain",domain,"assetId",`A#${assetId}#T${ticketId}`);
 
         let ASSET_TOTAL_QUANTITY = 0;
 
@@ -690,7 +710,15 @@ const insertAssetUser = async (req,res) => {
           ASSET_TOTAL_QUANTITY = assetQuantity || 0;
         }
 
-        const checkAssetCount = await getRowBySortKey(process.env.ASSET_COUNT_TABLE,"domain",domain,"assetId",assetId);
+        const checkAssetCount = await getDataFromCosmos({
+          containerId: process.env.ASSET_COUNT_TABLE,
+          query: "SELECT * FROM c WHERE c.domain = @domain AND c.assetId = @assetId",
+          parameters: [
+            { name: "@domain", value: domain }, { name: "@assetId", value: assetId }
+          ]
+        });
+        
+        // await getRowBySortKey(process.env.ASSET_COUNT_TABLE,"domain",domain,"assetId",assetId);
         let assetCountpayload = {};
 
         if(checkAssetCount.status === 200){
@@ -702,6 +730,15 @@ const insertAssetUser = async (req,res) => {
             assetId,
             count : newAssetCount
           }
+
+          const existingId = checkAssetCount?.data?.id
+          await updateItemFieldsInCosmos({
+            containerId: process.env.ASSET_COUNT_TABLE, 
+            id : existingId,
+            partitionKey : domain,
+            updates : assetCountpayload,
+          });//Update count data 
+          // await insertDynamoItem(process.env.ASSET_COUNT_TABLE,assetCountpayload); 
         }
         else{
           assetCountpayload = {
@@ -709,12 +746,21 @@ const insertAssetUser = async (req,res) => {
             assetId,
             count : ASSET_TOTAL_QUANTITY
           }
+
+          await upsertDataToCosmos({
+            containerId: process.env.ASSET_COUNT_TABLE, 
+            item : assetCountpayload,
+            partitionKey : domain}); //Add count data 
+          // await insertDynamoItem(process.env.ASSET_COUNT_TABLE,assetCountpayload);
         }
 
-        await insertDynamoItem(process.env.ASSET_COUNT_TABLE,assetCountpayload); //Add count data 
+        
+        return await upsertDataToCosmos({
+            containerId: process.env.ASSET_USER_DATA_TABLE, 
+            item : rowData,
+            partitionKey : domain});
 
-
-        return insertDynamoItem(process.env.ASSET_USER_DATA_TABLE, rowData);
+        // return insertDynamoItem(process.env.ASSET_USER_DATA_TABLE, rowData);
       });
 
       // Wait for current batch to finish
