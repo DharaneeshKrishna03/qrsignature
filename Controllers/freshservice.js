@@ -769,6 +769,8 @@ const insertAssetUser = async (req,res) => {
     );  
     const batchSize = 10;
 
+    // console.log("Available Assets : ",assetsInfo);
+
     for (let i = 0; i < assetsInfo.length; i += batchSize) {
       const batch = assetsInfo.slice(i, i + batchSize);
       // Prepare promises for current batch
@@ -798,7 +800,11 @@ const insertAssetUser = async (req,res) => {
           ]
         });
 
+        // console.log("checkAssetAlreadyThere : ",checkAssetAlreadyThere);
+
         let isAssetPresent = false;
+        let assetQuantityId = null;
+        let allAssetQuantity = null;
         
         // await getRowBySortKey(process.env.ASSET_USER_DATA_TABLE,"domain",domain,"assetId",`A#${assetId}#T${ticketId}`);
 
@@ -808,7 +814,9 @@ const insertAssetUser = async (req,res) => {
           const data = checkAssetAlreadyThere?.data;
           const previousCount = data?.ticketData?.assetQuantity;
           const presentCount = assetQuantity || 0;
+          allAssetQuantity = presentCount;
           isAssetPresent = true;
+          assetQuantityId = checkAssetAlreadyThere?.data?.id;
           const newCount = presentCount - previousCount;
           ASSET_TOTAL_QUANTITY = newCount;
 
@@ -825,6 +833,8 @@ const insertAssetUser = async (req,res) => {
             { name: "@domain", value: domain }, { name: "@assetId", value: assetId }
           ]
         });
+
+        // console.log("checkAssetCount : ",checkAssetCount);
         
         // await getRowBySortKey(process.env.ASSET_COUNT_TABLE,"domain",domain,"assetId",assetId);
         let assetCountpayload = {};
@@ -838,6 +848,8 @@ const insertAssetUser = async (req,res) => {
             assetId,
             count : newAssetCount
           }
+
+          // console.log("if assetCountpayload : ",assetCountpayload);
 
           const existingId = checkAssetCount?.data?.id
           await updateItemFieldsInCosmos({
@@ -860,20 +872,31 @@ const insertAssetUser = async (req,res) => {
             item : assetCountpayload,
             partitionKey : domain}); //Add count data 
           // await insertDynamoItem(process.env.ASSET_COUNT_TABLE,assetCountpayload);
-        }
+        };
 
-        
-        return  isAssetPresent ? {status : 200, message : "Asset Already Present"} : await upsertDataToCosmos({
+        if(isAssetPresent){
+          let newPayload = checkAssetAlreadyThere?.data;
+          newPayload.ticketData.assetQuantity = allAssetQuantity;
+          return await updateItemFieldsInCosmos({
+            containerId: process.env.ASSET_USER_DATA_TABLE, 
+            id : assetQuantityId,
+            partitionKey : domain,
+            updates : newPayload,
+          });
+        }
+        else{
+          return await upsertDataToCosmos({
             containerId: process.env.ASSET_USER_DATA_TABLE, 
             item : rowData,
             partitionKey : domain});
+        }
 
         // return insertDynamoItem(process.env.ASSET_USER_DATA_TABLE, rowData);
       });
 
       // Wait for current batch to finish
       const data = await Promise.all(insertPromises);
-      console.log(data);
+      // console.log(data);
     }
   }
 
