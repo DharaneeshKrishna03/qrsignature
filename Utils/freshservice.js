@@ -1,5 +1,9 @@
 const axios = require('axios');
 const jwt = require("jsonwebtoken");
+const path = require("path");
+
+const {encrypt} = require('./encDec');
+
 
 
 const callFreshserviceAPI = async ({
@@ -153,5 +157,12 @@ const fetchAllPages = async (baseEndpoint, decAPIKey, domain,key,maxSize) => {
   return allResults;
 };
 
+async function encryptFileName(filename) {
+    const ext = path.extname(filename);
+    const name = path.basename(filename, ext);
+    const encrypted = await encrypt(name); 
+    return `${encrypted}${ext}`;
+}
 
-module.exports = {callFreshserviceAPI,generateSignatureUrl,getConsumableType,fetchFS,fetchAllPages}
+
+module.exports = {callFreshserviceAPI,generateSignatureUrl,getConsumableType,fetchFS,fetchAllPages,encryptFileName}
