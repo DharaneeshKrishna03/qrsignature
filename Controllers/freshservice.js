@@ -167,7 +167,7 @@ const updateTicket = async (req) => {
 
     const updateTicketRes = await callFreshserviceAPI({
       method: "PUT",
-      endpoint: `tickets/${ticketId}?bypass_mandatory:true`,
+      endpoint: `tickets/${ticketId}?bypass_mandatory=true`,
       data: updationPayload,
       apiKey: decAPIKey,
       domain: clientDomain,
