@@ -36,7 +36,7 @@ const authorize = async (req, res, next) => {
     const clientData = clientRawData.data;
     const decSecretKey = await decrypt(clientData.secretKey);
 
-    console.log(decSecretKey);
+    // console.log(decSecretKey);
 
     if (!clientData?.isActive) {
       return res.status(403).json({ error: "Domain or secretKey mismatch" });
@@ -47,6 +47,7 @@ const authorize = async (req, res, next) => {
     req.client = clientData; 
     next();
   } catch (err) {
+    console.log("ERROR : ",err);
     if (err.name === 'TokenExpiredError') {
       return res.status(403).json({ error: "Token expired" });
     } else if (err.name === 'JsonWebTokenError') {

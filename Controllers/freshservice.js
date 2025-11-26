@@ -3,8 +3,9 @@ const cheerio = require('cheerio');
 const axios = require('axios');
 const FormData = require("form-data")
 
-const { uploadBase64ToBlob, updateItemFieldsInCosmos, upsertDataToCosmos, getTicketsByAsset, getAssetTicketCount, getAssetQuantityCount, getDataFromCosmos } = require("../Functions/cosmos");
-const { callFreshserviceAPI, generateSignatureUrl, getConsumableType, fetchFS, fetchAllPages } = require("../Utils/freshservice");
+
+const { uploadBase64ToBlob,updateItemFieldsInCosmos,upsertDataToCosmos, getTicketsByAsset,getAssetTicketCount,getAssetQuantityCount,getDataFromCosmos } = require("../Functions/cosmos");
+const { callFreshserviceAPI,generateSignatureUrl,getConsumableType,fetchFS,fetchAllPages,encryptFileName } = require("../Utils/freshservice");
 const { decrypt } = require("../Utils/encDec");
 const { all } = require("axios");
 
@@ -24,11 +25,12 @@ const generateQRSign = async (req, res) => {
     const qrBase64 = await QRCode.toDataURL(ticketUrl);
 
     const fileName = `QR-${ticketId}.png`;
+    const encFileName = await encryptFileName(fileName);
 
     const cfUrl = await uploadBase64ToBlob(
       qrBase64,
       `QRImages/${domain}`,
-      fileName
+      encFileName
     );
     console.log("✅ CloudFront URL:", cfUrl);
 
@@ -167,7 +169,7 @@ const updateTicket = async (req) => {
 
     const updateTicketRes = await callFreshserviceAPI({
       method: "PUT",
-      endpoint: `tickets/${ticketId}?bypass_mandatory:true`,
+      endpoint: `tickets/${ticketId}?bypass_mandatory=true`,
       data: updationPayload,
       apiKey: decAPIKey,
       domain: clientDomain,
@@ -364,10 +366,12 @@ const addSignature = async (req, res) => {
     const decAPIKey = await decrypt(encAPIKey);
 
     const fileName = `Sign-${ticketId}.png`;
+    const encFileName = await encryptFileName(fileName);
+
     const cfUrl = await uploadBase64ToBlob(
       signature,
       `SignatureImages/${domain}`,
-      fileName
+      encFileName
     );
 
     console.log("✅ CloudFront URL:", cfUrl);
@@ -770,6 +774,8 @@ const insertAssetUser = async (req, res) => {
     );
     const batchSize = 10;
 
+    // console.log("Available Assets : ",assetsInfo);
+
     for (let i = 0; i < assetsInfo.length; i += batchSize) {
       const batch = assetsInfo.slice(i, i + batchSize);
       // Prepare promises for current batch
@@ -799,6 +805,8 @@ const insertAssetUser = async (req, res) => {
           ]
         });
 
+        // console.log("checkAssetAlreadyThere : ",checkAssetAlreadyThere);
+
         let isAssetPresent = false;
 
         // await getRowBySortKey(process.env.ASSET_USER_DATA_TABLE,"domain",domain,"assetId",`A#${assetId}#T${ticketId}`);
@@ -809,7 +817,9 @@ const insertAssetUser = async (req, res) => {
           const data = checkAssetAlreadyThere?.data;
           const previousCount = data?.ticketData?.assetQuantity;
           const presentCount = assetQuantity || 0;
+          allAssetQuantity = presentCount;
           isAssetPresent = true;
+          assetQuantityId = checkAssetAlreadyThere?.data?.id;
           const newCount = presentCount - previousCount;
 
           console.log({ assetId });
@@ -848,6 +858,8 @@ const insertAssetUser = async (req, res) => {
             count: newAssetCount
           }
 
+          // console.log("if assetCountpayload : ",assetCountpayload);
+
           const existingId = checkAssetCount?.data?.id
           await updateItemFieldsInCosmos({
             containerId: process.env.ASSET_COUNT_TABLE,
@@ -874,22 +886,17 @@ const insertAssetUser = async (req, res) => {
         }
 
 
-        return (
-          isAssetPresent
-            ? { status: 200, message: "Asset Already Present" }
-            : await upsertDataToCosmos({
-              containerId: process.env.ASSET_USER_DATA_TABLE,
-              item: rowData,
-              partitionKey: domain
-            })
-        );
+        return  isAssetPresent ? {status : 200, message : "Asset Already Present"} : await upsertDataToCosmos({
+            containerId: process.env.ASSET_USER_DATA_TABLE,
+            item : rowData,
+            partitionKey : domain});
 
         // return insertDynamoItem(process.env.ASSET_USER_DATA_TABLE, rowData);
       });
 
       // Wait for current batch to finish
       const data = await Promise.all(insertPromises);
-      console.log(data);
+      // console.log(data);
     }
   }
 
