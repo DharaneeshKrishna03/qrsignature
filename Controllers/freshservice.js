@@ -1,10 +1,10 @@
 const QRCode = require("qrcode");
-const cheerio  = require('cheerio');
+const cheerio = require('cheerio');
 const axios = require('axios');
 const FormData = require("form-data")
 
-const { uploadBase64ToBlob,updateItemFieldsInCosmos,upsertDataToCosmos, getTicketsByAsset,getAssetTicketCount,getAssetQuantityCount,getDataFromCosmos } = require("../Functions/cosmos");
-const { callFreshserviceAPI,generateSignatureUrl,getConsumableType,fetchFS,fetchAllPages } = require("../Utils/freshservice");
+const { uploadBase64ToBlob, updateItemFieldsInCosmos, upsertDataToCosmos, getTicketsByAsset, getAssetTicketCount, getAssetQuantityCount, getDataFromCosmos } = require("../Functions/cosmos");
+const { callFreshserviceAPI, generateSignatureUrl, getConsumableType, fetchFS, fetchAllPages } = require("../Utils/freshservice");
 const { decrypt } = require("../Utils/encDec");
 const { all } = require("axios");
 
@@ -52,9 +52,9 @@ const generateQRSign = async (req, res) => {
     const updateBody = {
       body: updatePayload,
       client: req.client,
-      needQr : req.body.needQr,
-      needSign : req.body.needSign,
-      signType : req.body.signType
+      needQr: req.body.needQr,
+      needSign: req.body.needSign,
+      signType: req.body.signType
     };
 
     await updateTicket(updateBody);
@@ -70,7 +70,7 @@ const generateQRSign = async (req, res) => {
 
 const updateTicket = async (req) => {
   try {
-    const { ticketId, type, fieldValues,requesterName,requesterId } = req.body;
+    const { ticketId, type, fieldValues, requesterName, requesterId } = req.body;
 
     const clientData = req.client;
     const encAPIKey = clientData?.fsApiKey;
@@ -100,8 +100,8 @@ const updateTicket = async (req) => {
       const needSign = req.needSign;
       const signType = req.signType;
 
-      if(type === 'Service Request'){
-        signatureUrl = await generateSignatureUrl(clientDomain, ticketId,requesterName,requesterId);
+      if (type === 'Service Request') {
+        signatureUrl = await generateSignatureUrl(clientDomain, ticketId, requesterName, requesterId);
       }
 
       const $ = cheerio.load(ticketDescription);
@@ -116,8 +116,8 @@ const updateTicket = async (req) => {
 
 
       const updatedDescription =
-                              type === "Service Request"
-                                ? `
+        type === "Service Request"
+          ? `
                             <div style="display:flex;justify-content:space-between;align-items:flex-start;gap:10px;">
                               <div style="width:85%;word-break:break-word;">
                                 ${ticketDescription}
@@ -125,15 +125,15 @@ const updateTicket = async (req) => {
                               <div id="serviceBlock" style="width:15%;display:flex;flex-direction:column;align-items:flex-end;flex-shrink:0;">
                                 <div style="margin-bottom:10px;">${fieldValues["description"]}</div>
                                 ${needSign
-                                  ? signType === "get"
-                                    ? `<div id="signatureBlock" style="text-align:center;">
+            ? signType === "get"
+              ? `<div id="signatureBlock" style="text-align:center;">
                                         <a id="signaturePresent" href="${signatureUrl}" target="_blank" rel="noreferrer"
                                           style="display:inline-block;padding:8px 15px;background-color:#1b3e59;color:#ffffff;
                                                 text-decoration:none;font-size:13px;border-radius:5px;font-weight:500;">
                                           Get Signature
                                         </a>
                                       </div>`
-                                    : `<div style="
+              : `<div style="
                                         display:inline-flex;
                                         align-items:center;
                                         background-color:#ffffff;
@@ -148,10 +148,10 @@ const updateTicket = async (req) => {
                                         <span id="signaturePresent" style="color:#28a745;font-size:16px;margin-right:8px;">✔</span>
                                         Signed
                                       </div>`
-                                  : ""}       
+            : ""}
                               </div>
                             </div>`
-                                : `
+          : `
                             <div style="display:flex;justify-content:space-between;align-items:flex-start;gap:10px;">
                               <div style="width:90%;word-break:break-word;">
                                 ${ticketDescription}
@@ -195,26 +195,26 @@ const updateTicket = async (req) => {
   }
 };
 
-const triggerSignature = async (req,res) => {
-  try{
-    const {name,domain,ticketId,signature,requesterId,signUrl} = req.body;
+const triggerSignature = async (req, res) => {
+  try {
+    const { name, domain, ticketId, signature, requesterId, signUrl } = req.body;
 
-    const response = await axios.post(signUrl,{
+    const response = await axios.post(signUrl, {
       name,
       domain,
-      ticketId,signature,
+      ticketId, signature,
       requesterId
     });
 
-    if(response.status === 200){
-      return res.status(200).json({message : "Triggered Signature Successfully.",status:200});
+    if (response.status === 200) {
+      return res.status(200).json({ message: "Triggered Signature Successfully.", status: 200 });
     }
-    else{
-      console.log("Error Occured : ",response);
-      return res.status(500).json({message : "Signature Trigger Failed.",status:200});
+    else {
+      console.log("Error Occured : ", response);
+      return res.status(500).json({ message: "Signature Trigger Failed.", status: 200 });
     }
   }
-  catch(error){
+  catch (error) {
     console.error("Error in triggerSignature:", error);
     return res.status(500).json({
       status: 500,
@@ -259,7 +259,7 @@ const addSignatureNote = async ({
 
     const url = `https://${domain}/api/v2/tickets/${ticketId}/notes`;
     const auth = Buffer.from(`${decAPIKey}:X`).toString("base64");
-    
+
 
     let attempt = 0;
     let hasRetriedWithoutUser = false;
@@ -312,8 +312,7 @@ const addSignatureNote = async ({
               : baseDelay * Math.pow(2, attempt);
 
           console.warn(
-            `⏳ Rate limit hit (429). Retrying in ${retryAfter / 1000}s (attempt ${
-              attempt + 1
+            `⏳ Rate limit hit (429). Retrying in ${retryAfter / 1000}s (attempt ${attempt + 1
             }/${maxRetries})...`
           );
           await sleep(retryAfter);
@@ -342,10 +341,10 @@ const addSignatureNote = async ({
   } catch (error) {
     console.error("❌ Error adding signature note:", error);
     return {
-          success: false,
-          status: 500,
-          error: error.message,
-        };
+      success: false,
+      status: 500,
+      error: error.message,
+    };
   }
 };
 
@@ -381,15 +380,15 @@ const addSignature = async (req, res) => {
 
     let noteResponse = await addSignatureNote({
       name,
-      base64Data : signature,
+      base64Data: signature,
       cfUrl,
       fileName,
       ticketId,
       requesterId,
       decAPIKey,
       domain,
-      maxRetries : 15,
-      baseDelay : 60000, 
+      maxRetries: 15,
+      baseDelay: 60000,
     });
 
     if (noteResponse.status === 200 || noteResponse.status === 201) {
@@ -614,8 +613,8 @@ const getAssociations = async (req, res) => {
   }
 };
 
-const initialScan = async (req,res) => {
-  const {domain} = req.body;
+const initialScan = async (req, res) => {
+  const { domain } = req.body;
 
   const clientData = req.client;
   const encAPIKey = clientData?.fsApiKey;
@@ -623,41 +622,41 @@ const initialScan = async (req,res) => {
 
   res.status(200).json({
     message: "Scan Triggered Successfully",
-    status : 200
+    status: 200
   });
 
   //Get Consumable Type ID
-  const consumableAssetId = await getConsumableType(decAPIKey,domain);
+  const consumableAssetId = await getConsumableType(decAPIKey, domain);
 
   // console.log(consumableAssetId);
 
-  if(consumableAssetId){
+  if (consumableAssetId) {
     let newClient = clientData;
     // delete newClient.domain;
 
     newClient.consumableId = consumableAssetId;
 
     const updationStatus = await updateItemFieldsInCosmos({
-          containerId: process.env.ASSET_CLIENT_TABLE, 
-          id : clientData?.id,
-          partitionKey : domain,
-          updates : newClient,
-        });
+      containerId: process.env.ASSET_CLIENT_TABLE,
+      id: clientData?.id,
+      partitionKey: domain,
+      updates: newClient,
+    });
     // await updateDynamoItem(process.env.ASSET_CLIENT_TABLE,'domain',domain,null,null,newClient);
 
-    if(updationStatus.status === 200){
+    if (updationStatus.status === 200) {
       //Get All Consumable Assets
-      const allConsumableAssets = await fetchAllPages(`assets?filter="asset_type_id:${consumableAssetId}"`,decAPIKey,domain,'assets',30);
+      const allConsumableAssets = await fetchAllPages(`assets?filter="asset_type_id:${consumableAssetId}"`, decAPIKey, domain, 'assets', 30);
 
       const consumableAssetIds = allConsumableAssets.map(item => item.display_id);
 
-      for(const assetId of consumableAssetIds){
-        const allAssociations = await fetchAllPages(`assets/${assetId}/requests?per_page=100`,decAPIKey,domain,'requests',100);
+      for (const assetId of consumableAssetIds) {
+        const allAssociations = await fetchAllPages(`assets/${assetId}/requests?per_page=100`, decAPIKey, domain, 'requests', 100);
         // console.log(allAssociations);
 
         const fetchIds = allAssociations.map((r) => r.request_id)
-        .filter((id) => id.includes("SR-"))
-        .map((id) => Number(id.replace("SR-", "")));
+          .filter((id) => id.includes("SR-"))
+          .map((id) => Number(id.replace("SR-", "")));
 
         const BATCH_SIZE = 10;
 
@@ -698,9 +697,10 @@ const initialScan = async (req,res) => {
                 ASSET_TOTAL_QUANTITY += assetInfo?.quantity || 0;
 
                 await upsertDataToCosmos({
-                      containerId: process.env.ASSET_USER_DATA_TABLE, 
-                      item : rowData,
-                      partitionKey : domain});
+                  containerId: process.env.ASSET_USER_DATA_TABLE,
+                  item: rowData,
+                  partitionKey: domain
+                });
               }
             })
           );
@@ -710,30 +710,31 @@ const initialScan = async (req,res) => {
         const countPayload = {
           domain,
           assetId: assetId,
-          count : ASSET_TOTAL_QUANTITY
+          count: ASSET_TOTAL_QUANTITY
         }
         await upsertDataToCosmos({
-                      containerId: process.env.ASSET_COUNT_TABLE, 
-                      item : countPayload,
-                      partitionKey : domain});
+          containerId: process.env.ASSET_COUNT_TABLE,
+          item: countPayload,
+          partitionKey: domain
+        });
       }
     }
   }
 }
 
-const getAssetsUsers = async (req,res) => {
-  try{
-    const {domain,assetId,nextPageToken} = req.body;
+const getAssetsUsers = async (req, res) => {
+  try {
+    const { domain, assetId, nextPageToken } = req.body;
 
-    const [ticketCount,ticketQuantityCount,ticketsData] = await Promise.all([
+    const [ticketCount, ticketQuantityCount, ticketsData] = await Promise.all([
       getAssetTicketCount(domain, assetId),
-      getAssetQuantityCount(domain,assetId),
+      getAssetQuantityCount(domain, assetId),
       getTicketsByAsset(domain, assetId, nextPageToken, Number(process.env.PAGE_LIMIT)),
     ]);
 
-    return res.status(200).json({status:200,ticketQuantityCount, count:ticketCount, ...ticketsData})
-  } 
-  catch(error){
+    return res.status(200).json({ status: 200, ticketQuantityCount, count: ticketCount, ...ticketsData })
+  }
+  catch (error) {
     console.error("Error fetching assetusers:", error);
     return res.status(500).json({
       status: 500,
@@ -744,8 +745,8 @@ const getAssetsUsers = async (req,res) => {
 
 };
 
-const insertAssetUser = async (req,res) => {
-  const {domain,ticketId,requesterEmail,requesterName} = req.body;
+const insertAssetUser = async (req, res) => {
+  const { domain, ticketId, requesterEmail, requesterName } = req.body;
 
   const clientData = req.client;
   const encAPIKey = clientData?.fsApiKey;
@@ -754,19 +755,19 @@ const insertAssetUser = async (req,res) => {
 
   res.status(200).json({
     message: "Insertion Triggered Successfully",
-    status : 200
+    status: 200
   });
 
   const rawTicketData = await fetchFS(
-                `tickets/${ticketId}?include=assets`,
-                decAPIKey,
-                domain
-              );
+    `tickets/${ticketId}?include=assets`,
+    decAPIKey,
+    domain
+  );
   if (rawTicketData.status === 200) {
     const ticketData = rawTicketData.data?.ticket;
     const assetsInfo = ticketData?.assets?.filter(
       (a) => a.ci_type_id === consumableAssetId
-    );  
+    );
     const batchSize = 10;
 
     for (let i = 0; i < assetsInfo.length; i += batchSize) {
@@ -799,22 +800,27 @@ const insertAssetUser = async (req,res) => {
         });
 
         let isAssetPresent = false;
-        
+
         // await getRowBySortKey(process.env.ASSET_USER_DATA_TABLE,"domain",domain,"assetId",`A#${assetId}#T${ticketId}`);
 
         let ASSET_TOTAL_QUANTITY = 0;
 
-        if(checkAssetAlreadyThere.status === 200){
+        if (checkAssetAlreadyThere.status === 200) {
           const data = checkAssetAlreadyThere?.data;
           const previousCount = data?.ticketData?.assetQuantity;
           const presentCount = assetQuantity || 0;
           isAssetPresent = true;
           const newCount = presentCount - previousCount;
-          ASSET_TOTAL_QUANTITY = newCount;
 
-        }
-        else{
+          console.log({ assetId });
+          console.log({ previousCount });
+          console.log({ presentCount });
+          console.log({ newCount });
+
+          ASSET_TOTAL_QUANTITY = newCount;
+        } else {
           ASSET_TOTAL_QUANTITY = assetQuantity || 0;
+          console.log({ assetQuantity });
           isAssetPresent = false;
         }
 
@@ -825,48 +831,58 @@ const insertAssetUser = async (req,res) => {
             { name: "@domain", value: domain }, { name: "@assetId", value: assetId }
           ]
         });
-        
+
         // await getRowBySortKey(process.env.ASSET_COUNT_TABLE,"domain",domain,"assetId",assetId);
         let assetCountpayload = {};
 
-        if(checkAssetCount.status === 200){
+        if (checkAssetCount.status === 200) {
           const presentCount = checkAssetCount?.data?.count;
           const newAssetCount = presentCount + ASSET_TOTAL_QUANTITY;
+
+          console.log({ presentCount1: presentCount });
+          console.log({ newAssetCount });
 
           assetCountpayload = {
             domain,
             assetId,
-            count : newAssetCount
+            count: newAssetCount
           }
 
           const existingId = checkAssetCount?.data?.id
           await updateItemFieldsInCosmos({
-            containerId: process.env.ASSET_COUNT_TABLE, 
-            id : existingId,
-            partitionKey : domain,
-            updates : assetCountpayload,
-          });//Update count data 
-          // await insertDynamoItem(process.env.ASSET_COUNT_TABLE,assetCountpayload); 
-        }
-        else{
+            containerId: process.env.ASSET_COUNT_TABLE,
+            id: existingId,
+            partitionKey: domain,
+            updates: assetCountpayload,
+          });//Update count data
+          // await insertDynamoItem(process.env.ASSET_COUNT_TABLE,assetCountpayload);
+        } else {
           assetCountpayload = {
             domain,
             assetId,
-            count : ASSET_TOTAL_QUANTITY
+            count: ASSET_TOTAL_QUANTITY
           }
 
+          console.log({ assetCountpayload });
+
           await upsertDataToCosmos({
-            containerId: process.env.ASSET_COUNT_TABLE, 
-            item : assetCountpayload,
-            partitionKey : domain}); //Add count data 
+            containerId: process.env.ASSET_COUNT_TABLE,
+            item: assetCountpayload,
+            partitionKey: domain
+          }); //Add count data
           // await insertDynamoItem(process.env.ASSET_COUNT_TABLE,assetCountpayload);
         }
 
-        
-        return  isAssetPresent ? {status : 200, message : "Asset Already Present"} : await upsertDataToCosmos({
-            containerId: process.env.ASSET_USER_DATA_TABLE, 
-            item : rowData,
-            partitionKey : domain});
+
+        return (
+          isAssetPresent
+            ? { status: 200, message: "Asset Already Present" }
+            : await upsertDataToCosmos({
+              containerId: process.env.ASSET_USER_DATA_TABLE,
+              item: rowData,
+              partitionKey: domain
+            })
+        );
 
         // return insertDynamoItem(process.env.ASSET_USER_DATA_TABLE, rowData);
       });
@@ -880,4 +896,4 @@ const insertAssetUser = async (req,res) => {
 
 }
 
-module.exports = { generateQRSign, getAssociations,addSignature,initialScan,getAssetsUsers,insertAssetUser,triggerSignature};
+module.exports = { generateQRSign, getAssociations, addSignature, initialScan, getAssetsUsers, insertAssetUser, triggerSignature };
